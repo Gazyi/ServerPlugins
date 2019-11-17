@@ -1,7 +1,7 @@
 # ServerPlugins
 Various shitty plugins for different needs.
 
-Radio Style Buy Menu for CS:GO
+## Radio Style Buy Menu for CS:GO
 
 This plugin allows to create separate buy menu on server for classic game mode. Menu items in weapons menu and all item prices are customizible via configs.
 
