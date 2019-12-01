@@ -1,34 +1,29 @@
 #include <sourcemod>
 #include <sdktools>
 #include <smlib_findweapon>
-//#include <smlib>
-//#include <cstrike>
 
 #pragma semicolon 1
+#pragma newdecls required
 
 // Plugin definitions
-#define PLUGIN_VERSION		"0.1"
-#define PLUGIN_NAME		"[CS:GO] Radio Style Buy Menu"
+#define PLUGIN_VERSION		"0.2"
 
-public Plugin:myinfo =
+public Plugin myinfo =
 {
-	name = PLUGIN_NAME,
+	name = "[CS:GO] Radio Style Buy Menu",
 	author = "Gazyi (Code snippets by LumiStance, Grey83, Greyscale and SMLIB contributors)",
-	version = PLUGIN_VERSION,
 	description = "Customizable radio style buy menu.",
+	version = PLUGIN_VERSION,
 	url = "https://github.com/Gazyi/ServerPlugins"
 };
 
 // Constants
-enum iSlots
-{
-	Slot_Primary,
-	Slot_Secondary,
-	Slot_Knife,
-	Slot_Grenade,
-	Slot_C4,
-	Slot_None
-};
+#define CS_SLOT_PRIMARY		0	/**< Primary weapon slot. */
+#define CS_SLOT_SECONDARY	1	/**< Secondary weapon slot. */
+#define CS_SLOT_KNIFE		2	/**< Knife slot. */
+#define CS_SLOT_GRENADE		3	/**< Grenade slot (will only return one grenade). */
+#define CS_SLOT_C4			4	/**< C4 slot. */
+
 enum ItemType
 {
 	Type_Pistol,
@@ -42,6 +37,7 @@ enum ItemType
 	Type_Equipment,
 	Type_None
 };
+
 enum Teams
 {
 	CS_TEAM_NONE,
@@ -49,32 +45,6 @@ enum Teams
 	CS_TEAM_T,
 	CS_TEAM_CT
 };
-
-#define PistolCat "Pistols"
-#define ShotgunCat "Shotguns"
-#define SMGCat "SMGs"
-#define RifleCat "Rifles"
-#define MGCat "Machineguns"
-#define EquipmentCat "open equipment menu"
-
-#define Vest "Vest"
-#define VestHelmet "Vest and Helmet"
-#define AssaultSuit "Heavy Assault Suit"
-#define Defuser "Defuse Kit"
-#define RescueKit "Rescue Kit"
-#define GrenadesCat "Grenades"
-#define HealthShot "Medi-Shot"
-#define Taser "Taser"
-#define TacShield "Tactical Shield"
-#define OpenGrenadeMenu "open grenades menu"
-
-#define HEGrenade "HE Grenade"
-#define FBGrenade "Flashbang"
-#define SMGrenade "Smoke Grenade"
-#define DCGrenade "Decoy Grenade"
-#define IncGrenade "Incendiary Grenade"
-#define Molotov "Molotov"
-#define TAGrenade "Tactical Awareness Grenade"
 
 #define HEGrenadeOffset 		14	// (14 * 4)
 #define FlashbangOffset 		15	// (15 * 4)
@@ -84,101 +54,102 @@ enum Teams
 #define HPShotOffset			21	// (21 * 4)
 #define	TAGrenadeOffset			22	// (22 * 4)
 
-new g_ConfigTimeStamp = -1;
-new bool:bLateLoad = false;
-new bool:g_AllowBots = false;
-new bool:g_BuyTimeEnded = false;
+// Debug messages
+bool bDebug = true;
 
-//Turn on for debug messages
-new bool:bDebug = false;
+// General plugin vars
+int g_ConfigTimeStamp = -1;
+bool bLateLoad = false;
+bool g_BuyTimeEnded = false;
 
 // Weapon Entity Members and Data
-new m_ArmorValue = -1;
-new m_bHasHelmet = -1;
-new m_bHasDefuser = -1;
-new m_MoneyAmount = -1;
-new offs_iItem = -1;
+int m_ArmorValue = -1;
+int m_bHasHelmet = -1;
+int m_bHasDefuser = -1;
+int m_MoneyAmount = -1;
+int offs_iItem = -1;
 
-new TotalNades;
-new FBTotalNades;
-new HETotalNades;
-new SGTotalNades;
-new IncTotalNades;
-new DCTotalNades;
-new TATotalNades;
-new HPShotsTotal;
+int TotalNades;
+int FBLimit;
+int GrenadeTypeLimit;
+int HPShotsLimit;
 
-//Exsiting CVar handles
-new Handle:GrenadeAmmoTotal = INVALID_HANDLE;
-new Handle:GrenadeFBAmmo = INVALID_HANDLE;
-new Handle:GrenadeAmmo = INVALID_HANDLE;
-new Handle:HPShotsAmmo = INVALID_HANDLE;
+// Exsiting CVar handles
+Handle GrenadeAmmoTotal = null;
+Handle GrenadeFBAmmo = null;
+Handle GrenadeAmmo = null;
+Handle HPShotsAmmo = null;
 
-//Buy zone timer handle and variable
+// Buy zone timer handle and variable
 float fbuytime;
-new Handle:BuyTimeTimer = INVALID_HANDLE;
+Handle BuyTimeTimer = null;
 
-//Plugin CVar handles
-new Handle:g_AllowTAGrenade = INVALID_HANDLE;
-new Handle:g_AllowAssaultSuit = INVALID_HANDLE;
-new Handle:g_AllowHealthshot = INVALID_HANDLE;
-new Handle:g_AllowTaser = INVALID_HANDLE;
-new Handle:g_ASuitArmor = INVALID_HANDLE;
-new Handle:g_AllowShield = INVALID_HANDLE;
+// Plugin CVar handles
+Handle g_AllowTAGrenade = null;
+Handle g_AllowAssaultSuit = null;
+Handle g_AllowHealthshot = null;
+Handle g_AllowTaser = null;
+Handle g_ASuitArmor = null;
+Handle g_AllowShield = null;
 
-//Parsing weapons config handle
-new Handle:WeaponConfigHandle = INVALID_HANDLE;
+// Default Equipment prices
+int g_VestPrice = 650;
+int g_HelmetPrice = 350;
+int g_VestHelmetPrice = 1000;
+int g_ASuitPrice = 6000;
+int g_DefuseKitPrice = 400;
+int g_TaserPrice = 200;
+int g_HPShotPrice = 800;
+int g_ShieldPrice = 2200;
 
-//Equipment price vars
-new g_VestPrice = 650;
-new g_HelmetPrice = 350;
-new g_VestHelmetPrice = 1000;
-new g_ASuitPrice = 6000;
-new g_DefuseKitPrice = 400;
-new g_TaserPrice = 200;
-new g_HPShotPrice = 800;
-new g_ShieldPrice = 2200;
+// Default Grenade prices
+int g_HEPrice = 300;
+int g_FBPrice = 200;
+int g_SGPrice = 300;
+int g_DCPrice = 50;
+int g_IncPrice = 600;
+int g_MolPrice = 400;
+int g_TAGPrice = 500;
 
-//Grenade price vars
-new g_HEPrice = 300;
-new g_FBPrice = 200;
-new g_SGPrice = 300;
-new g_DCPrice = 50;
-new g_IncPrice = 600;
-new g_MolPrice = 400;
-new g_TAGPrice = 500;
+// Original player hands for Heavy Assault Suit revert
+char g_PlayerHandsModel[MAXPLAYERS+1][PLATFORM_MAX_PATH];
+
+// Parsing weapons config handle
+Handle WeaponConfigHandle = null;
 
 // Weapon Menu Configuration
 #define MAX_WEAPON_COUNT 64
 #define SHOW_MENU -1
-new g_WeaponsCount;
+int g_WeaponsCount;
 
-new String:g_Weapons[MAX_WEAPON_COUNT][32];
-new g_WeaponIDs[MAX_WEAPON_COUNT];
-new g_Prices[MAX_WEAPON_COUNT];
+char g_Weapons[MAX_WEAPON_COUNT][32];
+int g_WeaponIDs[MAX_WEAPON_COUNT];
+int g_Prices[MAX_WEAPON_COUNT];
 
-new bool:g_MenuOpen[MAXPLAYERS+1] = {false, ...};
-new Handle:g_Mainmenu = INVALID_HANDLE;
-new Handle:g_Pistolmenu = INVALID_HANDLE;
-new Handle:g_Shotgunmenu = INVALID_HANDLE;
-new Handle:g_SMGmenu = INVALID_HANDLE;
-new Handle:g_Riflemenu = INVALID_HANDLE;
-new Handle:g_MGmenu = INVALID_HANDLE;
-new Handle:g_Equipmentmenu = INVALID_HANDLE;
-new Handle:g_Grenadesmenu = INVALID_HANDLE;
+// Buy Menu handles
+bool g_MenuOpen[MAXPLAYERS+1] = {false, ...};
+Handle g_Mainmenu = null;
+Handle g_Pistolmenu = null;
+Handle g_Shotgunmenu = null;
+Handle g_SMGmenu = null;
+Handle g_Riflemenu = null;
+Handle g_MGmenu = null;
+Handle g_Equipmentmenu = null;
+Handle g_Grenadesmenu = null;
 
-// Player Settings
-new g_PlayerPrimary[MAXPLAYERS+1] = {-1, ...};
-new g_PlayerSecondary[MAXPLAYERS+1] = {-1, ...};
-new g_PlayerOldPrimary[MAXPLAYERS+1] = {-1, ...};
-new g_PlayerOldSecondary[MAXPLAYERS+1] = {-1, ...};
+// Player's Weapon buy menu IDs
+int g_PlayerPrimary[MAXPLAYERS+1] = {-1, ...};
+int g_PlayerSecondary[MAXPLAYERS+1] = {-1, ...};
+int g_PlayerOldPrimary[MAXPLAYERS+1] = {-1, ...};
+int g_PlayerOldSecondary[MAXPLAYERS+1] = {-1, ...};
 
-public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	bLateLoad = late;
+	return APLRes_Success;
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	// Cache Send Property Offsets
 	m_ArmorValue = FindSendPropInfo("CCSPlayer", "m_ArmorValue");
@@ -188,18 +159,16 @@ public OnPluginStart()
 	offs_iItem = FindSendPropInfo("CBaseCombatWeapon", "m_iItemDefinitionIndex");
 	if (m_ArmorValue == -1 || m_bHasHelmet == -1 || m_bHasDefuser == -1 || m_MoneyAmount == -1) SetFailState("\nFailed to retrieve entity member offsets");
 
-	LoadTranslations("buymenu_migi.phrases");
-	
 	// Client Commands
 	RegConsoleCmd("sm_buy", Command_BuyMenu);
 	RegConsoleCmd("sm_buymenu", Command_BuyMenu);
 	
 	// Server CVars
-	g_AllowTAGrenade = CreateConVar("sm_buy_allow_tag", "0", "Allowing to buy TA Grenade.", FCVAR_NOTIFY);
-	g_AllowAssaultSuit = CreateConVar("sm_buy_allow_asuit", "0", "Allowing to buy Heavy Assault Suit.", FCVAR_NOTIFY);
-	g_AllowHealthshot = CreateConVar("sm_buy_allow_healthshot", "0", "Allowing to buy Medi-Shot.", FCVAR_NOTIFY);
-	g_AllowShield = CreateConVar("sm_buy_allow_shield", "0", "Allowing to buy shield.", FCVAR_NOTIFY);
-	g_AllowTaser = CreateConVar("sm_buy_allow_taser", "1", "Allowing to buy Zeus.", FCVAR_NOTIFY);
+	g_AllowTAGrenade = CreateConVar("sm_buy_allow_tag", "0", "Allow to buy TA Grenade.", FCVAR_NOTIFY);
+	g_AllowAssaultSuit = CreateConVar("sm_buy_allow_asuit", "0", "Allow to buy Heavy Assault Suit.", FCVAR_NOTIFY);
+	g_AllowHealthshot = CreateConVar("sm_buy_allow_healthshot", "0", "Allow to buy Medi-Shot.", FCVAR_NOTIFY);
+	g_AllowShield = CreateConVar("sm_buy_allow_shield", "0", "Allow to buy shield.", FCVAR_NOTIFY);
+	g_AllowTaser = CreateConVar("sm_buy_allow_taser", "1", "Allow to buy Zeus.", FCVAR_NOTIFY);
 	g_ASuitArmor = CreateConVar("sm_assaultsuit_armor", "200", "Max amount of assault suit armor points.", FCVAR_NOTIFY);
 	
 	// Event Hooks
@@ -208,12 +177,12 @@ public OnPluginStart()
 	HookEvent("player_team", Event_PlayerTeam);
 	HookEvent("item_pickup", Event_ItemPickup);
 	HookEvent("round_start", Event_RoundStart);
-	HookEvent("buytime_ended", Event_BuyTimeEnded);
+	//HookEvent("buytime_ended", Event_BuyTimeEnded);
 	HookEvent("exit_buyzone", Event_ExitBuyZone);
 	
 	if (bLateLoad)
 	{
-		for (new i = 1; i <= MaxClients; i++)
+		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (!IsClientInGame(i)) continue;
 
@@ -222,13 +191,13 @@ public OnPluginStart()
 	}
 }
 
-public OnPluginEnd()
+public void OnPluginEnd()
 {
 	CancelMenu(g_Mainmenu);
 	CheckCloseHandle(g_Mainmenu);
 }
 
-public OnMapStart()
+public void OnMapStart()
 {
 	// Load configuration
 	CheckConfig("configs/buymenu.ini");
@@ -237,22 +206,25 @@ public OnMapStart()
 	PrecacheSound("items/pickup_quiet_01.wav" , true);
 	PrecacheSound("ui/weapon_cant_buy.wav" , true);
 	PrecacheModel("models/player/custom_player/legacy/ctm_heavy.mdl", true);
-	PrecacheModel("models/weapons/ct_arms_ctm_heavy.mdl", true);
+	PrecacheModel("models/weapons/v_models/arms/ctm_heavy/v_sleeve_ctm_heavy.mdl", true);
+	//PrecacheModel("models/weapons/ct_arms_ctm_heavy.mdl", true);
 	PrecacheModel("models/player/custom_player/legacy/tm_phoenix_heavy.mdl", true);
-	PrecacheModel("models/weapons/t_arms_phoenix_heavy.mdl", true);
+	PrecacheModel("models/weapons/v_models/arms/phoenix_heavy/v_sleeve_phoenix_heavy.mdl", true);
+	//PrecacheModel("models/weapons/t_arms_phoenix_heavy.mdl", true);
+	
 	// Handle late load
 	if (GetClientCount(true))
-		for (new client_index = 1; client_index <= MaxClients; ++client_index)
+		for (int client_index = 1; client_index <= MaxClients; ++client_index)
 			if (IsClientInGame(client_index))
 			{
 				OnClientPutInServer(client_index);
 				if (IsPlayerAlive(client_index)) CreateTimer(0.1, Event_HandleSpawn, GetClientUserId(client_index));
 			}
 	InitializeMainMenu();
-	BuyTimeTimer = INVALID_HANDLE;
+	BuyTimeTimer = null;
 }
 
-public Action Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast)
 {
 	g_BuyTimeEnded = false;
 	PrintToServer("Custom buy menu active. Players can buy.");
@@ -271,46 +243,34 @@ public Action Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 	}
 }
 
-public Action Event_TimerBuyTimeEnded(Handle:timer, any:user_index)
+// For unknown reason Event_BuyTimeEnded event fires only at first round. That's why there's this workaround with timer.
+public Action Event_TimerBuyTimeEnded(Handle timer, int user_index)
 {
 	g_BuyTimeEnded = true;
-	new client_index = GetClientOfUserId(user_index);
-	BuyTimeTimer = INVALID_HANDLE;
+	int client_index = GetClientOfUserId(user_index);
+	BuyTimeTimer = null;
 	PrintToServer("Custom buy menu disabled. Buy time expired.");
 	//Close all opened menus
 	CloseBuyMenu(client_index);
 }
 
-public Action Event_BuyTimeEnded(Handle:event, const String:name[], bool:dontBroadcast) // For unknown reason this event fires only at first round. That's why there's this workaround above.
+public Action Event_ExitBuyZone(Handle event, const char[] name, bool dontBroadcast)
 {
-	g_BuyTimeEnded = true;
-	BuyTimeTimer = INVALID_HANDLE;
-	PrintToServer("Custom buy menu disabled. Buy time expired.");
 	//Close all opened menus
-	new client_index = GetClientOfUserId(GetEventInt(event, "userid"));
+	int client_index = GetClientOfUserId(GetEventInt(event, "userid"));
 	CloseBuyMenu(client_index);
 }
 
-public Action Event_ExitBuyZone(Handle:event, const String:name[], bool:dontBroadcast)
-{
-	//Close all opened menus
-	new client_index = GetClientOfUserId(GetEventInt(event, "userid"));
-	CloseBuyMenu(client_index);
-}
-
-public CloseBuyMenu(client_index)
+public void CloseBuyMenu(int client_index)
 {
 	CancelClientMenu(client_index);	// Delayed
 	g_MenuOpen[client_index] = false;
 }
 
-public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
-	new client_index = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (!client_index)
-	{
-		return;
-	}
+	int client_index = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (!client_index || IsFakeClient(client_index)) return;
 	if (!IsPlayerAlive(client_index))
 	{
 		g_PlayerOldPrimary[client_index] = -1;
@@ -320,21 +280,20 @@ public Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 	}
 }
 
-public Action:Event_ItemPickup(Handle:event, String:name[], bool:dontbroadcast)
+public Action Event_ItemPickup(Handle event, const char[] name, bool dontbroadcast)
 {
-	new client_index = GetClientOfUserId(GetEventInt(event, "userid"));
-	if (!client_index) return;
-	if (IsFakeClient(client_index) && !g_AllowBots) return;
+	int client_index = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (!client_index || IsFakeClient(client_index)) return;
 	CheckPrimWeaponSlot(client_index);
 	CheckSecWeaponSlot(client_index);
 }
 
-stock CheckConfig(const String:ini_file[])
+stock void CheckConfig(const char[] ini_file)
 {
-	decl String:file[PLATFORM_MAX_PATH];
+	char file[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, file, sizeof(file), ini_file);
 
-	new timestamp = GetFileTime(file, FileTime_LastChange);
+	int timestamp = GetFileTime(file, FileTime_LastChange);
 
 	if (timestamp == -1) SetFailState("\nCould not stat config file: %s.", file);
 
@@ -348,7 +307,7 @@ stock CheckConfig(const String:ini_file[])
 	}
 }
 
-stock InitializeMenus()
+void InitializeMenus()
 {
 	g_WeaponsCount = 0;
 	CheckCloseHandle(g_Pistolmenu);
@@ -367,18 +326,18 @@ stock InitializeMenus()
 	g_MGmenu = CreateMenu(MenuHandler_ChoosePrimary, MenuAction_Display|MenuAction_DrawItem|MenuAction_Select|MenuAction_Cancel);
 }
 
-bool:ParseConfigFile(const String:file[]) 
+bool ParseConfigFile(const char[] file) 
 {
 	// Set Defaults
 	ParseWeaponConfigFile();
-	new Handle:parser = SMC_CreateParser();
+	Handle parser = SMC_CreateParser();
 	SMC_SetReaders(parser, Config_NewSection, Config_UnknownKeyValue, Config_EndSection);
 	SMC_SetParseEnd(parser, Config_End);
 
-	new line = 0;
-	new col = 0;
-	new String:error[128];
-	new SMCError:result = SMC_ParseFile(parser, file, line, col);
+	int line = 0;
+	int col = 0;
+	char error[128];
+	SMCError result = SMC_ParseFile(parser, file, line, col);
 	CloseHandle(parser);
 
 	if (result != SMCError_Okay) {
@@ -389,8 +348,8 @@ bool:ParseConfigFile(const String:file[])
 	return (result == SMCError_Okay);
 }
 
-new g_configLevel;
-public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:quotes)
+int g_configLevel;
+public SMCResult Config_NewSection(Handle parser, const char[] section, bool quotes)
 {
 	g_configLevel++;
 	if (g_configLevel==2)
@@ -402,13 +361,13 @@ public SMCResult:Config_NewSection(Handle:parser, const String:section[], bool:q
 	return SMCParse_Continue;
 }
 
-public SMCResult:Config_UnknownKeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes)
+public SMCResult Config_UnknownKeyValue(Handle parser, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
 {
 	SetFailState("\nDidn't recognize configuration: Level %i %s=%s", g_configLevel, key, value);
 	return SMCParse_Continue;
 }
 
-public SMCResult:Config_EquipmentKeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes)
+public SMCResult Config_EquipmentKeyValue(Handle parser, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
 {
 	if (StrEqual("Vest", key, false)) g_VestPrice = StringToInt(value);
 	else if (StrEqual("Helmet", key, false)) g_HelmetPrice = StringToInt(value);
@@ -417,10 +376,11 @@ public SMCResult:Config_EquipmentKeyValue(Handle:parser, const String:key[], con
 	else if (StrEqual("Defuser", key, false)) g_DefuseKitPrice = StringToInt(value);
 	else if (StrEqual("Taser", key, false)) g_TaserPrice = StringToInt(value);
 	else if (StrEqual("Healthshot", key, false)) g_HPShotPrice = StringToInt(value);
+	else if (StrEqual("Shield", key, false)) g_ShieldPrice = StringToInt(value);
 	return SMCParse_Continue;
 }
 
-public SMCResult:Config_GrenadesKeyValue(Handle:parser, const String:key[], const String:value[], bool:key_quotes, bool:value_quotes)
+public SMCResult Config_GrenadesKeyValue(Handle parser, const char[] key, const char[] value, bool key_quotes, bool value_quotes)
 {
 	if (StrEqual("HEGrenade", key, false)) g_HEPrice = StringToInt(value);
 	else if (StrEqual("Flashbang", key, false)) g_FBPrice = StringToInt(value);
@@ -432,28 +392,28 @@ public SMCResult:Config_GrenadesKeyValue(Handle:parser, const String:key[], cons
 	return SMCParse_Continue;
 }
 
-public SMCResult:Config_EndSection(Handle:parser)
+public SMCResult Config_EndSection(Handle parser)
 {
 	g_configLevel--;
 	SMC_SetReaders(parser, Config_NewSection, Config_UnknownKeyValue, Config_EndSection);
 	return SMCParse_Continue;
 }
-	
-public Config_End(Handle:parser, bool:halted, bool:failed)
+
+public void Config_End(Handle parser, bool halted, bool failed)
 {
 	if (failed) SetFailState("\nPlugin configuration error");
 }
 
-ParseWeaponConfigFile()
+void ParseWeaponConfigFile()
 {
-	if (WeaponConfigHandle != INVALID_HANDLE)
+	if (WeaponConfigHandle != null)
     {
         CloseHandle(WeaponConfigHandle);
     }
 	
 	WeaponConfigHandle = CreateKeyValues("Weapons");
     
-	decl String:path[PLATFORM_MAX_PATH];
+	char path[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, path, sizeof(path), "configs/buymenu_weapons.ini");
     
 	if (!FileToKeyValues(WeaponConfigHandle, path))
@@ -461,9 +421,9 @@ ParseWeaponConfigFile()
         SetFailState("\"%s\" missing from server", path);
     }
 	
-	decl String:weaponid[8];
-	decl String:weaponname[64];
-	decl String:weapontype[64];
+	char weaponid[8];
+	char weaponname[64];
+	char weapontype[64];
 	
 	KvRewind(WeaponConfigHandle);
 	if (KvGotoFirstSubKey(WeaponConfigHandle))
@@ -479,7 +439,7 @@ ParseWeaponConfigFile()
 			KvGetString(WeaponConfigHandle, "weapon_type", weapontype, sizeof(weapontype));
 			g_Prices[g_WeaponsCount] = KvGetNum(WeaponConfigHandle, "in game price");
 
-			decl String:display[64];
+			char display[64];
 			Format(display, sizeof(display), "%s - %d$", weaponname, g_Prices[g_WeaponsCount]);
 			if (StrEqual("Pistol", weapontype, false))
 			{
@@ -507,14 +467,14 @@ ParseWeaponConfigFile()
     }
 }
 
-stock GetWeaponTeam(const char[] weaponid)
+stock int GetWeaponTeam(const char[] weaponid)
 {
 	KvRewind(WeaponConfigHandle);
 	if (!KvJumpToKey(WeaponConfigHandle, weaponid))
 	{
 		return -1;
 	}
-	decl String:weaponteam[8];
+	char weaponteam[8];
 	KvGetString(WeaponConfigHandle, "team", weaponteam, sizeof(weaponteam), "any");
 	if (StrEqual("t", weaponteam, false))
 	{
@@ -531,7 +491,7 @@ stock GetWeaponTeam(const char[] weaponid)
 }
 
 // Handle for pistol menu
-public MenuHandler_ChoosePistol(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_ChoosePistol(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display)
 	{
@@ -539,30 +499,30 @@ public MenuHandler_ChoosePistol(Handle:menu, MenuAction:action, param1, param2)
 	}
 	else if (action == MenuAction_DrawItem)
 	{
-		new client_index = param1;
-		decl String:weaponid[8];
+		int client_index = param1;
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
-		new Teams:client_team = Teams:GetClientTeam(client_index);
+		int weapon_index = StringToInt(weaponid);
+		int client_team = GetClientTeam(client_index);
 		if (bDebug)
 		{
 			PrintToServer("ID %d, team: %d", weapon_index, GetWeaponTeam(weaponid));
 		}
-		if ((GetWeaponTeam(weaponid) == 2) && (client_team == CS_TEAM_T))
+		if ((GetWeaponTeam(weaponid) == 2) && (view_as<Teams>(client_team) == CS_TEAM_T))
 		{
 			return ITEMDRAW_IGNORE;
 		}
-		else if ((GetWeaponTeam(weaponid) == 1) && (client_team == CS_TEAM_CT))
+		else if ((GetWeaponTeam(weaponid) == 1) && (view_as<Teams>(client_team) == CS_TEAM_CT))
 		{
 			return ITEMDRAW_IGNORE;
 		}
 	}
 	else if (action == MenuAction_Select)
 	{
-		new client_index = param1;
-		decl String:weaponid[8];
+		int client_index = param1;
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
+		int weapon_index = StringToInt(weaponid);
 		weapon_index = weapon_index-1;
 		if (bDebug)
 		{
@@ -582,9 +542,9 @@ public MenuHandler_ChoosePistol(Handle:menu, MenuAction:action, param1, param2)
 			}
 			PrintHintText(client_index, "#Cstrike_Already_Own_Weapon");
 			EmitSoundToClient(client_index, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
-			return;
+			return 0;
 		}
-		if (Teams:GetClientTeam(client_index) > CS_TEAM_SPECTATOR)
+		if (view_as<Teams>(GetClientTeam(client_index)) > CS_TEAM_SPECTATOR)
 		{
 			if (!TakePlayerMoney(client_index, g_Prices[weapon_index]))
 			{
@@ -593,16 +553,17 @@ public MenuHandler_ChoosePistol(Handle:menu, MenuAction:action, param1, param2)
 				{
 					PrintToServer("Client don't have enough money for selected ID %d, reset back to ID %d.", weapon_index, g_PlayerSecondary[client_index]);
 				}
-				return;
+				return 0;
 			}
 			GiveSecondary(client_index);
 		}
 	}
 	else if (action == MenuAction_Cancel) g_MenuOpen[param1] = false;
+	return 0;
 }
 
 // Handle for Primary menus
-public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_ChoosePrimary(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display)
 	{
@@ -610,30 +571,30 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 	}
 	else if (action == MenuAction_DrawItem)
 	{
-		new client_index = param1;
-		decl String:weaponid[8];
+		int client_index = param1;
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
-		new Teams:client_team = Teams:GetClientTeam(client_index);
+		int weapon_index = StringToInt(weaponid);
+		int client_team = GetClientTeam(client_index);
 		if (bDebug)
 		{
 			PrintToServer("ID %d, team: %d", weapon_index, GetWeaponTeam(weaponid));
 		}
-		if ((GetWeaponTeam(weaponid) == 2) && (client_team == CS_TEAM_T))
+		if ((GetWeaponTeam(weaponid) == 2) && (view_as<Teams>(client_team) == CS_TEAM_T))
 		{
 			return ITEMDRAW_IGNORE;
 		}
-		else if ((GetWeaponTeam(weaponid) == 1) && (client_team == CS_TEAM_CT))
+		else if ((GetWeaponTeam(weaponid) == 1) && (view_as<Teams>(client_team) == CS_TEAM_CT))
 		{
 			return ITEMDRAW_IGNORE;
 		}
 	}
 	else if (action == MenuAction_Select)
 	{
-		new client_index = param1;
-		decl String:weaponid[8];
+		int client_index = param1;
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
+		int weapon_index = StringToInt(weaponid);
 		weapon_index = weapon_index-1;
 		if (bDebug)
 		{
@@ -649,9 +610,9 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 			}
 			PrintHintText(client_index, "#Cstrike_Already_Own_Weapon");
 			EmitSoundToClient(client_index, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
-			return;
+			return 0;
 		}
-		if (Teams:GetClientTeam(client_index) > CS_TEAM_SPECTATOR)
+		if (view_as<Teams>(GetClientTeam(client_index)) > CS_TEAM_SPECTATOR)
 		{
 			if (!TakePlayerMoney(client_index, g_Prices[weapon_index]))
 			{
@@ -660,16 +621,17 @@ public MenuHandler_ChoosePrimary(Handle:menu, MenuAction:action, param1, param2)
 				{
 					PrintToServer("Client don't have enough money for selected ID %d, reset back to ID %d.", weapon_index, g_PlayerPrimary[client_index]);
 				}
-				return;
+				return 0;
 			}
 			GivePrimary(client_index);
 		}
 	}
 	else if (action == MenuAction_Cancel) g_MenuOpen[param1] = false;
+	return 0;
 }
 
 // Handle for Rifle menu (because heavy assault suit doesn't allow to buy rifles)
-public MenuHandler_ChooseRifle(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_ChooseRifle(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display)
 	{
@@ -677,36 +639,36 @@ public MenuHandler_ChooseRifle(Handle:menu, MenuAction:action, param1, param2)
 	}
 	else if (action == MenuAction_DrawItem)
 	{
-		new client_index = param1;
-		decl String:weaponid[8];
+		int client_index = param1;
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
-		new Teams:client_team = Teams:GetClientTeam(client_index);
+		int weapon_index = StringToInt(weaponid);
+		int client_team = GetClientTeam(client_index);
 		if (bDebug)
 		{
 			PrintToServer("ID %d, team: %d", weapon_index, GetWeaponTeam(weaponid));
 		}
-		if ((GetWeaponTeam(weaponid) == 2) && (client_team == CS_TEAM_T))
+		if ((GetWeaponTeam(weaponid) == 2) && (view_as<Teams>(client_team) == CS_TEAM_T))
 		{
 			return ITEMDRAW_IGNORE;
 		}
-		else if ((GetWeaponTeam(weaponid) == 1) && (client_team == CS_TEAM_CT))
+		else if ((GetWeaponTeam(weaponid) == 1) && (view_as<Teams>(client_team) == CS_TEAM_CT))
 		{
 			return ITEMDRAW_IGNORE;
 		}
 	}
 	else if (action == MenuAction_Select)
 	{
-		new client_index = param1;
+		int client_index = param1;
 		if (GetEntProp(client_index, Prop_Send, "m_bHasHeavyArmor"))
 		{
 			PrintHintText(client_index, "#SFUI_BuyMenu_HeavyAssaultSuitRestriction");
 			EmitSoundToClient(client_index, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
-			return;
+			return 0;
 		}
-		decl String:weaponid[8];
+		char weaponid[8];
 		GetMenuItem(menu, param2, weaponid, sizeof(weaponid));
-		new weapon_index = StringToInt(weaponid);
+		int weapon_index = StringToInt(weaponid);
 		weapon_index = weapon_index-1;
 		if (bDebug)
 		{
@@ -722,9 +684,9 @@ public MenuHandler_ChooseRifle(Handle:menu, MenuAction:action, param1, param2)
 			}
 			PrintHintText(client_index, "#Cstrike_Already_Own_Weapon");
 			EmitSoundToClient(client_index, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
-			return;
+			return 0;
 		}
-		if (Teams:GetClientTeam(client_index) > CS_TEAM_SPECTATOR)
+		if (view_as<Teams>(GetClientTeam(client_index)) > CS_TEAM_SPECTATOR)
 		{
 			if (!TakePlayerMoney(client_index, g_Prices[weapon_index]))
 			{
@@ -733,35 +695,36 @@ public MenuHandler_ChooseRifle(Handle:menu, MenuAction:action, param1, param2)
 				{
 					PrintToServer("Client don't have enough money for selected ID %d, reset back to ID %d.", weapon_index, g_PlayerPrimary[client_index]);
 				}
-				return;
+				return 0;
 			}
 			GivePrimary(client_index);
 		}
 	}
 	else if (action == MenuAction_Cancel) g_MenuOpen[param1] = false;
+	return 0;
 }
 
-stock GivePrimary(client_index)
+void GivePrimary(int client_index)
 {
-	new old_weapon_index = g_PlayerOldPrimary[client_index];
-	new weapon_index = g_PlayerPrimary[client_index];
-	RemoveWeaponBySlot(client_index, iSlots:Slot_Primary);
+	int old_weapon_index = g_PlayerOldPrimary[client_index];
+	int weapon_index = g_PlayerPrimary[client_index];
+	RemoveWeaponBySlot(client_index, CS_SLOT_PRIMARY);
 	if (weapon_index >= 0 && weapon_index < g_WeaponsCount) GivePlayerItem(client_index, g_Weapons[weapon_index]);
 	if (old_weapon_index >= 0 && old_weapon_index < g_WeaponsCount)	GivePlayerItem(client_index, g_Weapons[old_weapon_index]);
 }
 
-stock GiveSecondary(client_index)
+void GiveSecondary(int client_index)
 {
-	new old_weapon_index = g_PlayerOldSecondary[client_index];
-	new weapon_index = g_PlayerSecondary[client_index];
-	RemoveWeaponBySlot(client_index, iSlots:Slot_Secondary);
+	int old_weapon_index = g_PlayerOldSecondary[client_index];
+	int weapon_index = g_PlayerSecondary[client_index];
+	RemoveWeaponBySlot(client_index, CS_SLOT_SECONDARY);
 	if (weapon_index >= 0 && weapon_index < g_WeaponsCount) GivePlayerItem(client_index, g_Weapons[weapon_index]);
 	if (old_weapon_index >= 0 && old_weapon_index < g_WeaponsCount)	GivePlayerItem(client_index, g_Weapons[old_weapon_index]);
 }
 
-stock bool:RemoveWeaponBySlot(client_index, iSlots:slot)
+bool RemoveWeaponBySlot(int client_index, int slot)
 {
-	new entity_index = GetPlayerWeaponSlot(client_index, iSlots:slot);
+	int entity_index = GetPlayerWeaponSlot(client_index, slot);
 	if (entity_index>0)
 	{
 		RemovePlayerItem(client_index, entity_index);
@@ -772,30 +735,30 @@ stock bool:RemoveWeaponBySlot(client_index, iSlots:slot)
 }
 
 // Must be manually replayed for late load
-public OnClientPutInServer(client_index)
+public void OnClientPutInServer(int client_index)
 {
 	g_MenuOpen[client_index]=false;
 }
 
-public Event_PlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadcast)
 {
 	CreateTimer(0.1, Event_HandleSpawn, GetEventInt(event, "userid"));
 }
 
-public Action CS_OnCSWeaponDrop(client_index, weaponIndex)
+public Action CS_OnCSWeaponDrop(int client_index, int weaponIndex)
 {
 	RequestFrame(CheckPrimWeaponSlot, client_index);
 	RequestFrame(CheckSecWeaponSlot, client_index);
 }
 
-public CheckPrimWeaponSlot(client_index)
+public void CheckPrimWeaponSlot(int client_index)
 {
-	new entity_index = GetPlayerWeaponSlot(client_index, iSlots:Slot_Primary);
+	int entity_index = GetPlayerWeaponSlot(client_index, CS_SLOT_PRIMARY);
 	if (entity_index>0)
 	{
 		//Find entity weapon ID in "weaponID" array and set weapon index.
-		new item_index;
-		new weapon_index;
+		int item_index;
+		int weapon_index;
 		char sBuffer[64];
 		GetEntityClassname(entity_index, sBuffer, 64);
 		if (bDebug)
@@ -810,7 +773,7 @@ public CheckPrimWeaponSlot(client_index)
 			{
 				PrintToServer("Item Schema ID: %s", sBuffer);
 			}
-			for (new i = 0; i <= MAX_WEAPON_COUNT; ++i) 
+			for (int i = 0; i <= MAX_WEAPON_COUNT; ++i) 
 			{ 
 				if (g_WeaponIDs[i] == item_index)
 				{
@@ -824,7 +787,7 @@ public CheckPrimWeaponSlot(client_index)
 				PrintToServer("Client %d have %s as primary weapon.", client_index, g_Weapons[weapon_index]);
 			}
 		}
-		return Plugin_Continue;
+		return;
 	}
 	else
 	{
@@ -833,13 +796,13 @@ public CheckPrimWeaponSlot(client_index)
 		{
 			PrintToServer("Client %d have no primary weapon.", client_index);
 		}
-		return Plugin_Continue;
+		return;
 	}
 }
 
-public CheckSecWeaponSlot(client_index)
+public void CheckSecWeaponSlot(int client_index)
 {
-	new entity_index = GetPlayerWeaponSlot(client_index, iSlots:Slot_Secondary);
+	int entity_index = GetPlayerWeaponSlot(client_index, CS_SLOT_SECONDARY);
 	/*if (!IsFakeClient(client_index))
 	{
 		PrintToServer("Client %d have %d entity as secondary.", client_index, entity_index);
@@ -847,8 +810,8 @@ public CheckSecWeaponSlot(client_index)
 	if (entity_index>0)
 	{
 		//Find entity weapon ID in "weaponID" array and set weapon index.
-		new item_index;
-		new weapon_index;
+		int item_index;
+		int weapon_index;
 		char sBuffer[64];
 		GetEntityClassname(entity_index, sBuffer, 64);
 		if (bDebug)
@@ -863,7 +826,7 @@ public CheckSecWeaponSlot(client_index)
 			{
 				PrintToServer("Item Schema ID: %s", sBuffer);
 			}
-			for (new i = 0; i <= MAX_WEAPON_COUNT; ++i) 
+			for (int i = 0; i <= MAX_WEAPON_COUNT; ++i) 
 			{ 
 				if (g_WeaponIDs[i] == item_index)
 				{
@@ -877,7 +840,7 @@ public CheckSecWeaponSlot(client_index)
 				PrintToServer("Client %d have %s as secondary weapon.", client_index, g_Weapons[weapon_index]);
 			}
 		}
-		return Plugin_Continue;
+		return;
 	}
 	else
 	{
@@ -886,16 +849,16 @@ public CheckSecWeaponSlot(client_index)
 		{
 			PrintToServer("Client %d have no secondary weapon.", client_index);
 		}
-		return Plugin_Continue;
+		return;
 	}
 }
 
 // If player spectated close any gun menus
-public Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_PlayerTeam(Handle event, const char[] name, bool dontBroadcast)
 {
-	new client_index = GetClientOfUserId(GetEventInt(event, "userid"));
+	int client_index = GetClientOfUserId(GetEventInt(event, "userid"));
 
-	if (g_MenuOpen[client_index] && (Teams:GetEventInt(event, "team") == CS_TEAM_SPECTATOR))
+	if (g_MenuOpen[client_index] && (view_as<Teams>(GetEventInt(event, "team")) == CS_TEAM_SPECTATOR))
 	{
 		CancelClientMenu(client_index);	// Delayed
 		g_MenuOpen[client_index] = false;
@@ -903,38 +866,38 @@ public Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroadcast)
 }
 
 // Handle for main menu
-public MenuHandler_Mainmenu(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_Mainmenu(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display) g_MenuOpen[param1] = true;
 	else if (action == MenuAction_Select)
 	{
 		char info[32];
 		GetMenuItem(menu, param2, info, sizeof(info));
-		if (StrEqual(info, PistolCat))
+		if (StrEqual(info, "PistolCat"))
 		{
 			Show_Submenu(g_Pistolmenu, param1, MENU_TIME_FOREVER);
 		}	
-		if (StrEqual(info, ShotgunCat))
+		if (StrEqual(info, "ShotgunCat"))
 		{
 			Show_Submenu(g_Shotgunmenu, param1, MENU_TIME_FOREVER);
 		}
-		if (StrEqual(info, SMGCat))
+		if (StrEqual(info, "SMGCat"))
 		{
 			Show_Submenu(g_SMGmenu, param1, MENU_TIME_FOREVER);
 		}	
-		if (StrEqual(info, RifleCat))
+		if (StrEqual(info, "RifleCat"))
 		{
 			Show_Submenu(g_Riflemenu, param1, MENU_TIME_FOREVER);
 		}
-		if (StrEqual(info, MGCat))
+		if (StrEqual(info, "MGCat"))
 		{
 			Show_Submenu(g_MGmenu, param1, MENU_TIME_FOREVER);
 		}
-		if (StrEqual(info, OpenGrenadeMenu))
+		if (StrEqual(info, "OpenGrenadeMenu"))
 		{
 			Show_GrenadeMenu( param1, MENU_TIME_FOREVER );
 		}
-		if (StrEqual(info, EquipmentCat))
+		if (StrEqual(info, "EquipmentCat"))
 		{
 			Show_EquipMenu( param1, MENU_TIME_FOREVER );
 		}
@@ -953,38 +916,38 @@ public MenuHandler_Mainmenu(Handle:menu, MenuAction:action, param1, param2)
 }
 
 // Handle for Equipment menu
-public MenuHandler_Equipment(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_Equipment(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display) g_MenuOpen[param1] = true;
 	else if (action == MenuAction_Select)
 	{
 		char info[32];
 		GetMenuItem(menu, param2, info, sizeof(info));
-		if (StrEqual(info, Vest))
+		if (StrEqual(info, "Vest"))
 		{
 			Buy_Armor( param1 );
 		}
-		if (StrEqual(info, VestHelmet))
+		if (StrEqual(info, "VestHelmet"))
 		{
 			Buy_ArmorHelmet( param1 );
 		}
-		if (StrEqual(info, AssaultSuit))
+		if (StrEqual(info, "AssaultSuit"))
 		{
 			Buy_AssaultSuit( param1 );
 		}
-		if (StrEqual(info, TacShield))
+		if (StrEqual(info, "TacShield"))
 		{
 			Buy_Shield( param1 );
 		}
-		if (StrEqual(info, Defuser))
+		if (StrEqual(info, "Defuser"))
 		{
 			Buy_Defusekit( param1 );
 		}
-		if (StrEqual(info, HealthShot))
+		if (StrEqual(info, "HealthShot"))
 		{
 			Buy_Healthshot( param1 );
 		}
-		if (StrEqual(info, Taser))
+		if (StrEqual(info, "Taser"))
 		{
 			Buy_Taser( param1 );
 		}
@@ -1003,7 +966,7 @@ public MenuHandler_Equipment(Handle:menu, MenuAction:action, param1, param2)
 }
 
 // Handle for Grenades menu
-public MenuHandler_Grenades(Handle:menu, MenuAction:action, param1, param2)
+public int MenuHandler_Grenades(Handle menu, MenuAction action, int param1, int param2)
 {
 	if (action == MenuAction_Display) g_MenuOpen[param1] = true;
 	else if (action == MenuAction_Select)
@@ -1014,34 +977,34 @@ public MenuHandler_Grenades(Handle:menu, MenuAction:action, param1, param2)
 		}
 		else
 		{
-			new Teams:client_team = Teams:GetClientTeam(param1);
+			int client_team = GetClientTeam(param1);
 			char info[32];
 			GetMenuItem(menu, param2, info, sizeof(info));
-			if (StrEqual(info, HEGrenade))
+			if (StrEqual(info, "HEGrenade"))
 			{
 				Buy_HEGrenade( param1 );
 			}
-			if (StrEqual(info, FBGrenade))
+			if (StrEqual(info, "FBGrenade"))
 			{
 				Buy_FBGrenade( param1 );
 			}
-			if (StrEqual(info, SMGrenade))
+			if (StrEqual(info, "SMGrenade"))
 			{
 				Buy_SMGrenade( param1 );
 			}
-			if (StrEqual(info, DCGrenade))
+			if (StrEqual(info, "DCGrenade"))
 			{
 				Buy_DCGrenade( param1 );
 			}
-			if ((client_team == CS_TEAM_CT) && (StrEqual(info, IncGrenade)))
+			if ((view_as<Teams>(client_team) == CS_TEAM_CT) && (StrEqual(info, "IncGrenade")))
 			{
 				Buy_IncGrenade( param1 );
 			}
-			if ((client_team == CS_TEAM_T) && (StrEqual(info, Molotov)))
+			if ((view_as<Teams>(client_team) == CS_TEAM_T) && (StrEqual(info, "Molotov")))
 			{
 				Buy_Molotov( param1 );
 			}
-			if (StrEqual(info, TAGrenade))
+			if (StrEqual(info, "TAGrenade"))
 			{
 				Buy_TAGrenade( param1 );
 			}
@@ -1060,129 +1023,134 @@ public MenuHandler_Grenades(Handle:menu, MenuAction:action, param1, param2)
 	}
 }
 
-stock CheckCloseHandle(&Handle:handle)
+void CheckCloseHandle(Handle handle)
 {
-	if (handle != INVALID_HANDLE)
+	if (handle != null)
 	{
 		CloseHandle(handle);
-		handle = INVALID_HANDLE;
+		handle = null;
 	}
 }
 
-stock InitializeMainMenu()
+void InitializeMainMenu()
 {
 	CheckCloseHandle(g_Mainmenu);
 	g_Mainmenu = CreateMenu(MenuHandler_Mainmenu, MenuAction_Display|MenuAction_Select|MenuAction_Cancel);
 	SetMenuTitle(g_Mainmenu, "Choose category:");
-	AddMenuItem(g_Mainmenu, PistolCat, "Pistols");
-	AddMenuItem(g_Mainmenu, ShotgunCat, "Shotguns");
-	AddMenuItem(g_Mainmenu, SMGCat, "SMGs");
-	AddMenuItem(g_Mainmenu, RifleCat, "Rifles");
-	AddMenuItem(g_Mainmenu, MGCat, "Machineguns");
-	AddMenuItem(g_Mainmenu, EquipmentCat, "Equipment");
-	AddMenuItem(g_Mainmenu, OpenGrenadeMenu, "Grenades");
+	AddMenuItem(g_Mainmenu, "PistolCat", "Pistols");
+	AddMenuItem(g_Mainmenu, "ShotgunCat", "Shotguns");
+	AddMenuItem(g_Mainmenu, "SMGCat", "SMGs");
+	AddMenuItem(g_Mainmenu, "RifleCat", "Rifles");
+	AddMenuItem(g_Mainmenu, "MGCat", "Machineguns");
+	AddMenuItem(g_Mainmenu, "EquipmentCat", "Equipment");
+	AddMenuItem(g_Mainmenu, "OpenGrenadeMenu", "Grenades");
 	SetMenuPagination(g_Mainmenu, MENU_NO_PAGINATION); 
 	SetMenuExitButton(g_Mainmenu, true);
 }
 
 //Makes proper menu item for display.
-stock AddBuyMenuItem (Handle:menu, const String:menuitem[], const String:displayname[], price)
+void AddBuyMenuItem (Handle menu, char[] menuitem, char[] displayname, int price)
 {
-	decl String:display[64];
+	char display[64];
 	Format(display, sizeof(display), "%s - %d$", displayname, price);
 	AddMenuItem(menu, menuitem, display);
 }
 
-stock InitializeEquipmentMenu(client)
+void InitializeEquipmentMenu(int client)
 {
 	CheckCloseHandle(g_Equipmentmenu);
 	g_Equipmentmenu = CreateMenu(MenuHandler_Equipment, MenuAction_Display|MenuAction_Select|MenuAction_Cancel);
-	new Teams:client_team = Teams:GetClientTeam(client);
-	AddBuyMenuItem(g_Equipmentmenu, Vest, "Kevlar vest", g_VestPrice);
-	AddBuyMenuItem(g_Equipmentmenu, VestHelmet, "Kevlar vest + Helmet", g_VestHelmetPrice);
+	int client_team = GetClientTeam(client);
+	AddBuyMenuItem(g_Equipmentmenu, "Vest", "Kevlar vest", g_VestPrice);
+	AddBuyMenuItem(g_Equipmentmenu, "VestHelmet", "Kevlar vest + Helmet", g_VestHelmetPrice);
 	if (GetConVarInt(g_AllowAssaultSuit) == 1)
 	{
-		AddBuyMenuItem(g_Equipmentmenu, AssaultSuit, "Heavy Assault Suit", g_ASuitPrice);
+		AddBuyMenuItem(g_Equipmentmenu, "AssaultSuit", "Heavy Assault Suit", g_ASuitPrice);
 	}
-	if (client_team == CS_TEAM_CT)
+	if (view_as<Teams>(client_team) == CS_TEAM_CT)
 	{
-		AddBuyMenuItem(g_Equipmentmenu, Defuser, "Defuse/Rescue Kit", g_DefuseKitPrice);
+		AddBuyMenuItem(g_Equipmentmenu, "Defuser", "Defuse/Rescue Kit", g_DefuseKitPrice);
 	}
-	if ((client_team == CS_TEAM_CT) && (GetConVarInt(g_AllowShield) == 1))
+	if ((view_as<Teams>(client_team) == CS_TEAM_CT) && (GetConVarInt(g_AllowShield) == 1))
 	{
-		AddBuyMenuItem(g_Equipmentmenu, TacShield, "Tactical Shield", g_ShieldPrice);
+		AddBuyMenuItem(g_Equipmentmenu, "TacShield", "Tactical Shield", g_ShieldPrice);
 	}
 	if (GetConVarInt(g_AllowTaser) == 1)
 	{
-		AddBuyMenuItem(g_Equipmentmenu, Taser, "Zeus x27", g_TaserPrice);
+		AddBuyMenuItem(g_Equipmentmenu, "Taser", "Zeus x27", g_TaserPrice);
 	}
 	if (GetConVarInt(g_AllowHealthshot) == 1)
 	{
-		AddBuyMenuItem(g_Equipmentmenu, HealthShot, "Medi-Shot", g_HPShotPrice);
+		AddBuyMenuItem(g_Equipmentmenu, "HealthShot", "Medi-Shot", g_HPShotPrice);
 	}
 	SetMenuPagination(g_Equipmentmenu, MENU_NO_PAGINATION);
 	SetMenuExitButton(g_Equipmentmenu, true);
 }
 
-stock InitializeGrenadesMenu(client)
+void InitializeGrenadesMenu(int client)
 {
 	CheckCloseHandle(g_Grenadesmenu);
 	g_Grenadesmenu = CreateMenu(MenuHandler_Grenades, MenuAction_Display|MenuAction_Select|MenuAction_Cancel);
-	new Teams:client_team = Teams:GetClientTeam(client);
-	AddBuyMenuItem(g_Grenadesmenu, HEGrenade, "HE Grenade", g_HEPrice);
-	AddBuyMenuItem(g_Grenadesmenu, FBGrenade, "Flashbang", g_FBPrice);
-	AddBuyMenuItem(g_Grenadesmenu, SMGrenade, "Smoke Grenade", g_SGPrice);
-	AddBuyMenuItem(g_Grenadesmenu, DCGrenade, "Decoy Grenade", g_DCPrice);
-	if (client_team == CS_TEAM_CT)
+	int client_team = GetClientTeam(client);
+	AddBuyMenuItem(g_Grenadesmenu, "HEGrenade", "HE Grenade", g_HEPrice);
+	AddBuyMenuItem(g_Grenadesmenu, "FBGrenade", "Flashbang", g_FBPrice);
+	AddBuyMenuItem(g_Grenadesmenu, "SMGrenade", "Smoke Grenade", g_SGPrice);
+	AddBuyMenuItem(g_Grenadesmenu, "DCGrenade", "Decoy Grenade", g_DCPrice);
+	if (view_as<Teams>(client_team) == CS_TEAM_CT)
 	{
-		AddBuyMenuItem(g_Grenadesmenu, IncGrenade, "Incendiary Grenade", g_IncPrice);
+		AddBuyMenuItem(g_Grenadesmenu, "IncGrenade", "Incendiary Grenade", g_IncPrice);
 	}
-	if (client_team == CS_TEAM_T)
+	if (view_as<Teams>(client_team) == CS_TEAM_T)
 	{
-		AddBuyMenuItem(g_Grenadesmenu, Molotov, "Molotov", g_MolPrice);
+		AddBuyMenuItem(g_Grenadesmenu, "Molotov", "Molotov", g_MolPrice);
 	}
 	if (GetConVarInt(g_AllowTAGrenade) == 1)
 	{
-		AddBuyMenuItem(g_Grenadesmenu, TAGrenade, "TA Grenade", g_TAGPrice);
+		AddBuyMenuItem(g_Grenadesmenu, "TAGrenade", "TA Grenade", g_TAGPrice);
 	}
 	SetMenuPagination(g_Grenadesmenu, MENU_NO_PAGINATION);
 	SetMenuExitButton(g_Grenadesmenu, true);
 }
 
-public Action:Event_HandleSpawn(Handle:timer, any:user_index)
+public Action Event_HandleSpawn(Handle timer, int user_index)
 {
-	new client_index = GetClientOfUserId(user_index);
-	if (!client_index) return;
-	if (IsFakeClient(client_index) && !g_AllowBots) return;
-	//CheckPrimWeaponSlot(client_index);
-	//CheckSecWeaponSlot(client_index);
+	int client_index = GetClientOfUserId(user_index);
+	if ((!client_index) || IsFakeClient(client_index)) return;
 	PrintToChat(client_index, "[Buy Menu] Use console command (bind <key> sm_buy) to bind buy menu to any key.");
 	PrintToChat(client_index, "[Buy Menu] Unequip all non-standart weapons in inventory or stock items will not spawn.");
-	//Timer for setting Heavy armor hands (if you have player model plugin)
+	// Timer for setting Heavy armor hands (if you have player model plugin)
 	if (GetEntProp(client_index, Prop_Send, "m_bHasHeavyArmor"))
 	{
 		CreateTimer(0.25, SetHeavyHands, client_index, TIMER_FLAG_NO_MAPCHANGE); 
 	}
+	// Revert to standart arms (will be overwritten if you have player model plugin)
+	/*else
+	{
+		SetEntPropString(client_index, Prop_Send, "m_szArmsModel", g_PlayerHandsModel[client_index]);
+	}*/
 	InitializeEquipmentMenu(client_index);
 	InitializeGrenadesMenu(client_index);
 }
 
-public Action:SetHeavyHands(Handle:timer, client_index)
+public Action SetHeavyHands(Handle timer, int client_index)
 {
-	new Teams:client_team = Teams:GetClientTeam(client_index);
-	if (client_team == CS_TEAM_T)
+	int client_team = GetClientTeam(client_index);
+	
+	if (view_as<Teams>(client_team) == CS_TEAM_T)
 	{
+		//SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/t_arms_phoenix_heavy.mdl");
+		SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/v_models/arms/phoenix_heavy/v_sleeve_phoenix_heavy.mdl");
 		//SetEntityModel(client_index, "models/player/custom_player/legacy/tm_phoenix_heavy.mdl");
-		SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/t_arms_phoenix_heavy.mdl");
 	}
 	else
 	{
+		//SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/ct_arms_ctm_heavy.mdl");
+		SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/v_models/arms/ctm_heavy/v_sleeve_ctm_heavy.mdl");
 		//SetEntityModel(client_index, "models/player/custom_player/legacy/ctm_heavy.mdl");
-		SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/ct_arms_ctm_heavy.mdl");
 	}
 }
 
-public Action:Command_BuyMenu(client_index, args)
+public Action Command_BuyMenu(int client_index, int args)
 {
 	if (IsPlayerAlive(client_index))
 	{
@@ -1210,19 +1178,19 @@ public Action:Command_BuyMenu(client_index, args)
 	return Plugin_Continue;
 }
 
-public Action:Show_Submenu(Handle:menu, client_index, args)
+public Action Show_Submenu(Handle menu, int client_index, int args)
 {
 	DisplayMenu(menu, client_index, MENU_TIME_FOREVER);
 	return Plugin_Continue;
 }
 
-public Action:Show_EquipMenu(client_index, args)
+public Action Show_EquipMenu(int client_index, int args)
 {
 	DisplayMenu(g_Equipmentmenu, client_index, MENU_TIME_FOREVER);
 	return Plugin_Continue;
 }
 
-public Action:Show_GrenadeMenu(client_index, args)
+public Action Show_GrenadeMenu(int client_index, int args)
 {
 	DisplayMenu(g_Grenadesmenu, client_index, MENU_TIME_FOREVER);
 	return Plugin_Continue;
@@ -1234,7 +1202,7 @@ stock int CSGO_GetClientArmor(int client)
 }
 
 //Purchase kevlar
-public Action:Buy_Armor(client_index)
+public Action Buy_Armor(int client_index)
 {
 	if (GetEntProp(client_index, Prop_Send, "m_bHasHeavyArmor"))
 	{
@@ -1260,7 +1228,7 @@ public Action:Buy_Armor(client_index)
 }
 
 //Purchase kevlar+helmet
-public Action:Buy_ArmorHelmet(client_index)
+public Action Buy_ArmorHelmet(int client_index)
 {
 	if (GetEntProp(client_index, Prop_Send, "m_bHasHeavyArmor"))
 	{
@@ -1316,12 +1284,12 @@ public Action:Buy_ArmorHelmet(client_index)
 }
 
 //Purchase heavy assault suit
-public Action:Buy_AssaultSuit(client_index)
+public Action Buy_AssaultSuit(int client_index)
 {
 	if (g_PlayerPrimary[client_index] != -1)
 	{
-		decl String:weaponid[64];
-		new weapon_index = g_PlayerPrimary[client_index];
+		char weaponid[64];
+		int weapon_index = g_PlayerPrimary[client_index];
 		weapon_index = weapon_index+1;
 		IntToString(weapon_index, weaponid, sizeof(weaponid));
 		KvRewind(WeaponConfigHandle);
@@ -1329,13 +1297,12 @@ public Action:Buy_AssaultSuit(client_index)
 		{
 			return;
 		}
-		decl String:weapontype[64];
+		char weapontype[64];
 		KvGetString(WeaponConfigHandle, "weapon_type", weapontype, sizeof(weapontype), "INVALID WEAPON");
 		if (bDebug)
 		{
 			PrintToServer("Client %d's weapon type: %s", client_index, weapontype);
 		}
-	
 		if (StrEqual("Rifle", weapontype, false))
 		{
 			PrintHintText(client_index, "#SFUI_BuyMenu_HeavyAssaultSuitRestriction");
@@ -1355,27 +1322,34 @@ public Action:Buy_AssaultSuit(client_index)
 		{
 			return;
 		}
-		new Teams:client_team = Teams:GetClientTeam(client_index);
+		int client_team = GetClientTeam(client_index);
 		SetEntProp(client_index, Prop_Send, "m_bHasHeavyArmor", true);
 		SetEntProp(client_index, Prop_Send, "m_bWearingSuit", true);
 		SetEntProp(client_index, Prop_Send, "m_bHasHelmet", true);
 		SetEntProp(client_index, Prop_Data, "m_ArmorValue", GetConVarInt(g_ASuitArmor));
-		if (client_team == CS_TEAM_T)
+		GetEntPropString(client_index, Prop_Send, "m_szArmsModel", g_PlayerHandsModel[client_index], sizeof(g_PlayerHandsModel[]));
+		if (bDebug)
+		{
+			PrintToServer("Client %d hands model path: %s", client_index, g_PlayerHandsModel[client_index]);
+		}
+		if (view_as<Teams>(client_team) == CS_TEAM_T)
 		{
 			SetEntityModel(client_index, "models/player/custom_player/legacy/tm_phoenix_heavy.mdl");
-			SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/t_arms_phoenix_heavy.mdl");
+			//SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/t_arms_phoenix_heavy.mdl");
+			SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/v_models/arms/phoenix_heavy/v_sleeve_phoenix_heavy.mdl");
 		}
 		else
 		{
 			SetEntityModel(client_index, "models/player/custom_player/legacy/ctm_heavy.mdl");
-			SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/ct_arms_ctm_heavy.mdl");
+			//SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/ct_arms_ctm_heavy.mdl");
+			SetEntPropString(client_index, Prop_Send, "m_szArmsModel", "models/weapons/v_models/arms/ctm_heavy/v_sleeve_ctm_heavy.mdl");
 		}
 		EmitSoundToClient(client_index, "survival/armor_pickup_01.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 	}
 }
 
 //Purchase defuse kit
-public Action:Buy_Defusekit(client_index)
+public Action Buy_Defusekit(int client_index)
 {
 	if (GetEntProp(client_index, Prop_Send, "m_bHasDefuser"))
 	{
@@ -1395,7 +1369,7 @@ public Action:Buy_Defusekit(client_index)
 }
 
 //Purchase tactical shield
-public Action:Buy_Shield(client_index)
+public Action Buy_Shield(int client_index)
 {
 	if(Client_HasWeapon(client_index, "weapon_shield"))
 	{
@@ -1412,20 +1386,20 @@ public Action:Buy_Shield(client_index)
 }
 
 //Check Healthshot limit
-bool:PlayerHasFullHPShots(client)
+bool PlayerHasFullHPShots(int client)
 {
-	new HPSEquipped = GetClientHPshots(client);
+	int HPSEquipped = GetClientHPshots(client);
 	
-	if ((HPShotsAmmo = FindConVar("ammo_item_limit_healthshot")) == INVALID_HANDLE)
+	if ((HPShotsAmmo = FindConVar("ammo_item_limit_healthshot")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_item_limit_healthshot");
 	}
 	
-	HPShotsTotal = GetConVarInt(HPShotsAmmo);
+	HPShotsLimit = GetConVarInt(HPShotsAmmo);
 	
-	if ( HPSEquipped >= HPShotsTotal )
+	if ( HPSEquipped >= HPShotsLimit )
 	{
-		PrintHintText(client, "You can only carry %d Medi-Shots.", HPShotsTotal);
+		PrintHintText(client, "You can only carry %d Medi-Shots.", HPShotsLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1434,7 +1408,7 @@ bool:PlayerHasFullHPShots(client)
 }
 
 //Purchase Healthshot
-public Action:Buy_Healthshot(client_index)
+public Action Buy_Healthshot(int client_index)
 {
 	if (PlayerHasFullHPShots(client_index))
 	{
@@ -1451,7 +1425,7 @@ public Action:Buy_Healthshot(client_index)
 }
 
 //Purchase Taser
-public Action:Buy_Taser(client_index)
+public Action Buy_Taser(int client_index)
 {
 	if(Client_HasWeapon(client_index, "weapon_taser"))
 	{
@@ -1469,47 +1443,47 @@ public Action:Buy_Taser(client_index)
 	}
 }
 
-GetClientHEGrenades(client)
+int GetClientHEGrenades(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, HEGrenadeOffset);
 }
 
-GetClientSmokeGrenades(client)
+int GetClientSmokeGrenades(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, SmokegrenadeOffset);
 }
 
-GetClientFlashbangs(client)
+int GetClientFlashbangs(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, FlashbangOffset);
 }
 
-GetClientDecoyGrenades(client)
+int GetClientDecoyGrenades(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, DecoyGrenadeOffset);
 }
 
-GetClientIncendaryGrenades(client)
+int GetClientIncendaryGrenades(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, IncenderyGrenadesOffset);
 }
 
-GetClientTAGrenades(client)
+int GetClientTAGrenades(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, TAGrenadeOffset);
 }
 
-GetClientHPshots(client)
+int GetClientHPshots(int client)
 {
 	return GetEntProp(client, Prop_Data, "m_iAmmo", _, HPShotOffset);
 }
 
 //Check total grenade limit
-bool:PlayerHasTotalNades(client)
+bool PlayerHasTotalNades(int client)
 {
-	new nadeTotal = GetClientHEGrenades(client) + GetClientFlashbangs(client) + GetClientSmokeGrenades(client) + GetClientDecoyGrenades(client) + GetClientIncendaryGrenades(client) + GetClientTAGrenades(client);
+	int nadeTotal = GetClientHEGrenades(client) + GetClientFlashbangs(client) + GetClientSmokeGrenades(client) + GetClientDecoyGrenades(client) + GetClientIncendaryGrenades(client) + GetClientTAGrenades(client);
 	
-	if ((GrenadeAmmoTotal = FindConVar("ammo_grenade_limit_total")) == INVALID_HANDLE)
+	if ((GrenadeAmmoTotal = FindConVar("ammo_grenade_limit_total")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_total");
 	}
@@ -1527,20 +1501,20 @@ bool:PlayerHasTotalNades(client)
 }
 
 //Check flashbang limit
-bool:PlayerHasFullFBNades(client)
+bool PlayerHasFullFBNades(int client)
 {
-	new FBEquipped = GetClientFlashbangs(client);
+	int FBEquipped = GetClientFlashbangs(client);
 	
-	if ((GrenadeFBAmmo = FindConVar("ammo_grenade_limit_flashbang")) == INVALID_HANDLE)
+	if ((GrenadeFBAmmo = FindConVar("ammo_grenade_limit_flashbang")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_flashbang");
 	}
 	
-	FBTotalNades = GetConVarInt(GrenadeFBAmmo);
+	FBLimit = GetConVarInt(GrenadeFBAmmo);
 	
-	if ( FBEquipped >= FBTotalNades )
+	if ( FBEquipped >= FBLimit )
 	{
-		PrintHintText(client, "You can only carry %d flashbangs.", FBTotalNades);
+		PrintHintText(client, "You can only carry %d flashbangs.", FBLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1549,19 +1523,19 @@ bool:PlayerHasFullFBNades(client)
 }
 
 //Check HE grenade limit
-bool:PlayerHasFullHENades(client)
+bool PlayerHasFullHENades(int client)
 {
-	new HEEquipped = GetClientHEGrenades(client);
+	int HEEquipped = GetClientHEGrenades(client);
 	
-	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == INVALID_HANDLE)
+	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_default");
 	}
-	HETotalNades = GetConVarInt(GrenadeAmmo);
+	GrenadeTypeLimit = GetConVarInt(GrenadeAmmo);
 	
-	if ( HEEquipped >= HETotalNades )
+	if ( HEEquipped >= GrenadeTypeLimit )
 	{
-		PrintHintText(client, "You can only carry %d HE grenades.", HETotalNades);
+		PrintHintText(client, "You can only carry %d HE grenades.", GrenadeTypeLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1570,19 +1544,19 @@ bool:PlayerHasFullHENades(client)
 }
 
 //Check SG grenade limit
-bool:PlayerHasFullSGNades(client)
+bool PlayerHasFullSGNades(int client)
 {
-	new SGEquipped = GetClientSmokeGrenades(client);
+	int SGEquipped = GetClientSmokeGrenades(client);
 	
-	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == INVALID_HANDLE)
+	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_default");
 	}
-	SGTotalNades = GetConVarInt(GrenadeAmmo);
+	GrenadeTypeLimit = GetConVarInt(GrenadeAmmo);
 	
-	if ( SGEquipped >= SGTotalNades )
+	if ( SGEquipped >= GrenadeTypeLimit )
 	{
-		PrintHintText(client, "You can only carry %d smoke grenades.", SGTotalNades);
+		PrintHintText(client, "You can only carry %d smoke grenades.", GrenadeTypeLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1591,19 +1565,19 @@ bool:PlayerHasFullSGNades(client)
 }
 
 //Check decoy grenade limit
-bool:PlayerHasFullDCNades(client)
+bool PlayerHasFullDCNades(int client)
 {
-	new DCEquipped = GetClientDecoyGrenades(client);
+	int DCEquipped = GetClientDecoyGrenades(client);
 	
-	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == INVALID_HANDLE)
+	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_default");
 	}
-	DCTotalNades = GetConVarInt(GrenadeAmmo);
+	GrenadeTypeLimit = GetConVarInt(GrenadeAmmo);
 	
-	if ( DCEquipped >= DCTotalNades )
+	if ( DCEquipped >= GrenadeTypeLimit )
 	{
-		PrintHintText(client, "You can only carry %d decoy grenades.", DCTotalNades);
+		PrintHintText(client, "You can only carry %d decoy grenades.", GrenadeTypeLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1612,19 +1586,19 @@ bool:PlayerHasFullDCNades(client)
 }
 
 //Check incendaries limit
-bool:PlayerHasFullIncNades(client)
+bool PlayerHasFullIncNades(int client)
 {
-	new IncEquipped = GetClientIncendaryGrenades(client);
+	int IncEquipped = GetClientIncendaryGrenades(client);
 	
-	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == INVALID_HANDLE)
+	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_default");
 	}
-	IncTotalNades = GetConVarInt(GrenadeAmmo);
+	GrenadeTypeLimit = GetConVarInt(GrenadeAmmo);
 	
-	if ( IncEquipped >= IncTotalNades )
+	if ( IncEquipped >= GrenadeTypeLimit )
 	{
-		PrintHintText(client, "You can only carry %d incendary grenades/molotovs.", IncTotalNades);
+		PrintHintText(client, "You can only carry %d incendary grenades/molotovs.", GrenadeTypeLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1633,19 +1607,19 @@ bool:PlayerHasFullIncNades(client)
 }
 
 //Check TA grenade limit
-bool:PlayerHasFullTANades(client)
+bool PlayerHasFullTANades(int client)
 {
-	new TAEquipped = GetClientTAGrenades(client);
+	int TAEquipped = GetClientTAGrenades(client);
 	
-	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == INVALID_HANDLE)
+	if ((GrenadeAmmo = FindConVar("ammo_grenade_limit_default")) == null)
 	{
 		SetFailState("Unable to locate CVar ammo_grenade_limit_default");
 	}
-	TATotalNades = GetConVarInt(GrenadeAmmo);
+	GrenadeTypeLimit = GetConVarInt(GrenadeAmmo);
 	
-	if ( TAEquipped >= TATotalNades )
+	if ( TAEquipped >= GrenadeTypeLimit )
 	{
-		PrintHintText(client, "You can only carry %d tactical awareness grenades.", TATotalNades);
+		PrintHintText(client, "You can only carry %d tactical awareness grenades.", GrenadeTypeLimit);
 		EmitSoundToClient(client, "ui/weapon_cant_buy.wav", SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
 		return true;
 	}
@@ -1653,7 +1627,7 @@ bool:PlayerHasFullTANades(client)
 	return false;
 }
 
-public Action:Buy_HEGrenade(client_index)
+public Action Buy_HEGrenade(int client_index)
 {
 	if (PlayerHasFullHENades(client_index))
 	{
@@ -1666,7 +1640,7 @@ public Action:Buy_HEGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_hegrenade");
 }
 
-public Action:Buy_FBGrenade(client_index)
+public Action Buy_FBGrenade(int client_index)
 {
 	if (PlayerHasFullFBNades(client_index))
 	{
@@ -1679,7 +1653,7 @@ public Action:Buy_FBGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_flashbang");
 }
 
-public Action:Buy_SMGrenade(client_index)
+public Action Buy_SMGrenade(int client_index)
 {
 	if (PlayerHasFullSGNades(client_index))
 	{
@@ -1692,7 +1666,7 @@ public Action:Buy_SMGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_smokegrenade");
 }
 
-public Action:Buy_DCGrenade(client_index)
+public Action Buy_DCGrenade(int client_index)
 {
 	if (PlayerHasFullDCNades(client_index))
 	{
@@ -1705,7 +1679,7 @@ public Action:Buy_DCGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_decoy");
 }
 
-public Action:Buy_Molotov(client_index)
+public Action Buy_Molotov(int client_index)
 {
 	if (PlayerHasFullIncNades(client_index))
 	{
@@ -1718,7 +1692,7 @@ public Action:Buy_Molotov(client_index)
 	GivePlayerItem(client_index, "weapon_molotov");
 }
 
-public Action:Buy_IncGrenade(client_index)
+public Action Buy_IncGrenade(int client_index)
 {
 	if (PlayerHasFullIncNades(client_index))
 	{
@@ -1731,7 +1705,7 @@ public Action:Buy_IncGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_incgrenade");
 }
 
-public Action:Buy_TAGrenade(client_index)
+public Action Buy_TAGrenade(int client_index)
 {
 	if (PlayerHasFullTANades(client_index))
 	{
@@ -1744,9 +1718,9 @@ public Action:Buy_TAGrenade(client_index)
 	GivePlayerItem(client_index, "weapon_tagrenade");
 }
 
-stock bool:TakePlayerMoney(client_index, amount)
+bool TakePlayerMoney(int client_index, int amount)
 {
-    new money = GetEntData(client_index, m_MoneyAmount);
+    int money = GetEntData(client_index, m_MoneyAmount);
     
     money -= amount;
     if (money < 0)
