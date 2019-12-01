@@ -18,6 +18,6 @@ sm_assaultsuit_armor (200 is default) - Max amount of assault suit armor points.
 ```
 Known issues:
 - If client equipped custom weapon in inventory buy slot, stock weapon for this slot will be overwritten.
-- Gloves in Heavy Assault Suit will be overlapped.
+- Equipping Heavy Assault Suit will make gloves fallback to default CT gloves, regardless of team.
 
 If you have any bug reports, bug fixes and code enhancements, create issue here.
