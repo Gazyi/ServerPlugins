@@ -32,7 +32,7 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	airtime_enable = CreateConVar("sm_airtime_enabled", "1", "Enable Air Time Plugin.\n0 = Disabled\n1 = Enabled", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-	airtime_debug = CreateConVar("sm_airtime_debug", "1", "Debug Mode.\n0 = Disabled\n1 = Enabled", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+	airtime_debug = CreateConVar("sm_airtime_debug", "0", "Debug Mode.\n0 = Disabled\n1 = Enabled", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	airtime_time = CreateConVar("sm_airtime_time", "12.0", "How many seconds players can be underwater without drowning. Negative number disables drowning.", FCVAR_NOTIFY);
 	
 	//Convar Changes hooks
