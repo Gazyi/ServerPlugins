@@ -9,7 +9,8 @@ Client commands:
 ```sm_buy / sm_buymenu (in console) / !buy / !buymenu (in chat) - Open buy menu.```
 
 Server CVars:
-```sm_buy_allow_taser (Default value: 1) - Allow to buy Zeus.
+```
+sm_buy_allow_taser (Default value: 1) - Allow to buy Zeus.
 sm_buy_allow_tag (Default value: 0) - Allow to buy TA Grenade.
 sm_buy_allow_asuit (Default value: 0) - Allow to buy Heavy Assault Suit.
 sm_buy_allow_healthshot (Default value: 0) - Allow to buy Medi-Shot.
@@ -25,7 +26,8 @@ Known issues:
 This plugin allows to control underwater time and disable drowning.
 
 Server CVars:
-```sm_airtime_enabled (Default value: 1) - Enable Air Time Plugin.
+```
+sm_airtime_enabled (Default value: 1) - Enable Air Time Plugin.
 sm_airtime_time (Default value: 12) - How many seconds players can be underwater without drowning. Negative number disables drowning.
 sm_airtime_debug (Default value: 0) - Enable debug Mode.
 ```
