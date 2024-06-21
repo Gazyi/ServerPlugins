@@ -1,0 +1,105 @@
+"Games"
+{
+    "tf"
+    {
+        "Offsets"
+        {
+            "CTFStunBall::ApplyBallImpactEffectOnVictim"
+            {
+                "library" 	"server"
+                "windows" 	"266"
+                "linux" 	"267"
+            }
+            "CTFStunBall::PipebombTouch"
+            {
+                "library" 	"server"
+                "windows" 	"260"
+                "linux" 	"261"
+            }
+            "CTFProjectile_Jar::PipebombTouch"
+            {
+                "library" 	"server"
+                "windows" 	"260"
+                "linux" 	"261"
+            }
+            "CTFProjectile_Cleaver::OnHit"
+            {
+                "library" 	"server"
+                "windows" 	"265"
+                "linux" 	"266"
+            }
+        }
+        "Signatures"
+        {
+            "CTFProjectile_Jar::VPhysicsCollisionThink"
+            {
+                "library" 	"server"
+                "windows" 	"\x53\x8B\xDC\x83\xEC\x08\x83\xE4\xF0\x83\xC4\x04\x55\x8B\x6B\x04\x89\x6C\x24\x04\x8B\xEC\x81\xEC\xF8\x00\x00\x00\x56\x57\x8B\xF9"
+                "linux" 	"@_ZN17CTFProjectile_Jar22VPhysicsCollisionThinkEv"
+            }
+        }
+        "Functions"
+        {
+            "CTFStunBall::ApplyBallImpactEffectOnVictim"
+            {
+                "offset"	"CTFStunBall::ApplyBallImpactEffectOnVictim"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+
+                "arguments"
+                {
+                    "pOther"
+                    {
+                        "type"	"cbaseentity"
+                    }
+                }
+            }
+            "CTFStunBall::PipebombTouch"
+            {
+                "offset"    "CTFStunBall::PipebombTouch"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+
+                "arguments"
+                {
+                    "pOther"
+                    {
+                        "type"	"cbaseentity"
+                    }
+                }
+            }
+            "CTFProjectile_Jar::PipebombTouch"
+            {
+                "offset"    "CTFProjectile_Jar::PipebombTouch"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+
+                "arguments"
+                {
+                    "pOther"
+                    {
+                        "type"	"cbaseentity"
+                    }
+                }
+            }
+            "CTFProjectile_Cleaver::OnHit"
+            {
+                "offset"    "CTFProjectile_Cleaver::OnHit"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+
+                "arguments"
+                {
+                    "pOther"
+                    {
+                        "type"	"cbaseentity"
+                    }
+                }
+            }
+        }
+    }
+}
