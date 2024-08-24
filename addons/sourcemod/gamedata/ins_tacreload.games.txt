@@ -1,0 +1,148 @@
+"Games"
+{
+    "insurgency"
+    {
+        "Offsets"
+        {
+            // CINSWeaponBallistic::FinishReload()
+            "CINSWeaponFinishReload"
+            {
+                "windows" "282"
+                "windows64" "282"
+                "linux" "283"
+            }
+            // CINSWeapon::AbortReload()
+            "CINSWeaponAbortReload"
+            {
+                "windows" "283"
+                "windows64" "283"
+                "linux" "284"
+            }
+            // bool CINSWeapon::Reload()
+            "CINSWeaponReload"
+            {
+                "windows" "284"
+                "windows64" "284"
+                "linux" "285"
+            }
+            // int CINSWeapon::GetMaxClip1()
+            "CINSWeaponGetMaxClip1"
+            {
+                "windows" "323"
+                "windows64" "323"
+                "linux" "324"
+            }
+            // bool CINSWeapon::ShouldLoseAmmoOnReload()
+            "CINSWeaponShouldLoseAmmoOnReload"
+            {
+                "windows" "400"
+                "windows64" "400"
+                "linux" "401"
+            }
+            // bool CINSWeapon::IsReloading()
+            "CINSWeaponIsReloading"
+            {
+                "windows" "401"
+                "windows64" "401"
+                "linux" "402"
+            }
+            // void CINSWeapon::OnHolsterComplete()
+            "CINSWeaponOnHolsterComplete"
+            {
+                "windows" "423"
+                "windows64" "423"
+                "linux" "424"
+            }
+        }
+        
+        "Signatures"
+        {
+            // bool CINSWeapon::IsSingleReload(CINSWeapon *this)
+            "CINSWeaponIsSingleReload"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x51\x57\x8B\xF9\x6A\x06"
+                "windows64" "\x40\x57\x48\x83\xEC\x20\x48\x8B\x01\xBA\x06\x00\x00\x00"
+                "linux"     "\x55\x89\xE5\x83\xEC\x38\x89\x75\xF8\x8B\x75\x08\x89\x5D\xF4\xE8\x2A\x2A\x2A\x2A\x81\xC3\xA4\x6B\x96\x00"
+            }
+            // int CINSWeapon::InstallWeaponUpgrade(CINSWeapon *this, int, bool)
+            "CINSWeaponInstallWeaponUpgrade"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x0C\xA1\x2A\x2A\x2A\x2A\x53\x56\x57\x8B\x70\x18"
+                "windows64" "\x40\x53\x55\x56\x41\x54\x41\x56\x48\x83\xEC\x30"
+                "linux"     "\x55\x89\xE5\x57\x56\x8D\x4D\xE0"
+            }
+            // int CINSWeapon::RemoveWeaponUpgrade(CINSWeapon *this, int, bool)
+            "CINSWeaponRemoveWeaponUpgrade"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x18\xA1\x2A\x2A\x2A\x2A\x53\x56\x57\x8B\x70\x18"
+                "windows64" "\x48\x89\x5C\x24\x20\x55\x57\x41\x56\x48\x83\xEC\x20"
+                "linux"     "\x55\x89\xE5\x57\x56\x8D\x4D\xDC\x53\xE8\x2A\x2A\x2A\x2A\x81\xC3\xDA\x14\x96\x00"
+            }
+            // CINSPlayer::DoAnimationEvent(PlayerAnimEvent_t, int)
+            "CINSPlayerDoAnimationEvent"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x53\xFF\x75\x0C\x8B\xD9\xFF\x75\x08\x8B\x8B\xA4\x1B\x00\x00"
+                "windows64" "\x48\x89\x5C\x24\x08\x48\x89\x74\x24\x10\x57\x48\x83\xEC\x20\x48\x8B\xF1\x48\x8B\x89\xD8\x1F\x00\x00"
+                "linux"     "\x55\x89\xE5\x83\xEC\x28\x89\x75\xF8\x8B\x75\x08\x89\x7D\xFC\x8B\x45\x10"
+            }
+            // float __fastcall CINSWeapon::GetReloadSpeedModifier(int a1)
+            "CINSWeaponGetReloadSpeedMod"
+            {
+                "library"   "server"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x14\x83\xB9\x90\x05\x00\x00\x00"
+                "windows64" "\x41\x57\x48\x83\xEC\x40\x48\x8D\x81\xC8\x06\x00\x00"
+                "linux"     "\x55\x89\xE5\x57\x56\x53\xE8\x2A\x2A\x2A\x2A\x81\xC3\x9D\x78\x96\x00"
+            }
+        }
+
+        "Functions"
+        {
+            "HookCINSWeaponReload"
+            {
+                "offset"    "CINSWeaponReload"
+                "hooktype"	"entity"
+                "return"	"bool"
+                "this"		"entity"
+            }
+            "HookCINSWeaponShouldLoseAmmoOnReload"
+            {
+                "offset"    "CINSWeaponShouldLoseAmmoOnReload"
+                "hooktype"	"entity"
+                "return"	"bool"
+                "this"		"entity"
+            }
+            "DetourCINSWeaponGetReloadSpeedMod"
+            {
+                "signature" "CINSWeaponGetReloadSpeedMod"
+                "callconv"  "thiscall"
+                "return"    "float"
+                "this"      "entity"
+            }
+            "HookCINSWeaponAbortReload"
+            {
+                "offset"    "CINSWeaponAbortReload"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+            }
+            "HookCINSWeaponFinishReload"
+            {
+                "offset"    "CINSWeaponFinishReload"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+            }
+            "HookCINSWeaponOnHolsterComplete"
+            {
+                "offset"    "CINSWeaponOnHolsterComplete"
+                "hooktype"	"entity"
+                "return"	"void"
+                "this"		"entity"
+            }
+        }
+    }
+}
