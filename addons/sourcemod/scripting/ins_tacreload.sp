@@ -364,10 +364,15 @@ static MRESReturn Dhook_CINSWeaponHolstered_Post( int iWeaponEnt )
     if ( iOwner > 0 && iOwner <= MaxClients && IsClientConnected( iOwner ) && IsClientInGame( iOwner ) && !IsFakeClient( iOwner ) )
     {
         if ( g_CvarDebug.BoolValue ) PrintToServer( "[TacReload] Client %i holstered weapon %i!", iOwner, iWeaponEnt );
-        g_bQueuedTacticalReload[ iOwner ] = false;
+
+        if ( g_bQueuedTacticalReload[ iOwner ] )
+        {
+            g_bQueuedTacticalReload[ iOwner ] = false;
+            RemoveReloadUpgrades( iWeaponEnt );
+        }
         g_bQueuedNormalReload[ iOwner ] = false;
+
         if ( g_CvarDebug.BoolValue ) PrintToServer( "[TacReload] Client %i unqueued for reload.", iOwner );
-        RemoveReloadUpgrades( iWeaponEnt );
         return MRES_Handled;
     }
     return MRES_Ignored;
@@ -563,8 +568,8 @@ stock void RemoveReloadUpgrades( int iWeaponEnt )
                 // Restore original upgrade
                 if ( g_CvarDebug.BoolValue ) PrintToServer( "[TacReload] Restoring weapon upgrade %i for entity %i!", g_iWeaponMagUpgrades[ client ], iWeaponEnt );
                 SDKCall( hSDKCallInstallUpgrade, iWeaponEnt, g_iWeaponMagUpgrades[ client ], false );
-                g_iWeaponMagUpgrades[ client ] = -1;
             }
+            g_iWeaponMagUpgrades[ client ] = -1;
         }
         else
         {
